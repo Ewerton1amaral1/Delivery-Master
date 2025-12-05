@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   Users, 
   ShoppingBag, 
   Utensils, 
+  UtensilsCrossed,
+  ChefHat,
   Menu,
   Bike,
   Calculator,
@@ -15,7 +17,9 @@ import {
   Briefcase,
   Moon,
   Sun,
-  Lock
+  Lock,
+  DoorOpen,
+  DoorClosed
 } from 'lucide-react';
 
 import { Dashboard } from './Dashboard';
@@ -30,6 +34,9 @@ import { Reports } from './Reports';
 import { DriverManagement } from './DriverManagement';
 import { TeamManagement } from './TeamManagement';
 import { Client, Product, Order, OrderStatus, ProductCategory, StoreSettings, SupplyItem, Driver, Employee } from '../types';
+
+// Simple notification sound (Base64 MP3) - "Ding Dong" style
+const NOTIFICATION_SOUND = "data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUUU4yOTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NExAAAAANIAAAAAExBTUUUU4yOTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NExAAAAANIAAAAAExBTUUUU4yOTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NExAAAAANIAAAAAExBTUUUU4yOTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
 
 // Mock Data Generators for new stores
 const generateInitialClients = (): Client[] => [
@@ -54,6 +61,7 @@ const DEFAULT_SETTINGS: StoreSettings = {
   address: 'Endereço da Loja',
   logoUrl: '',
   managerPassword: '',
+  isStoreOpen: true,
   deliveryRanges: [],
   driverFeeRanges: []
 };
@@ -74,6 +82,9 @@ export const StoreApp: React.FC<StoreAppProps> = ({ storeId, onLogout }) => {
   const [showSettingsLock, setShowSettingsLock] = useState(false);
   const [lockPassword, setLockPassword] = useState('');
   const [lockError, setLockError] = useState(false);
+  
+  // Audio Ref
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Toggle Dark Mode
   useEffect(() => {
@@ -118,25 +129,59 @@ export const StoreApp: React.FC<StoreAppProps> = ({ storeId, onLogout }) => {
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
 
-  useEffect(() => { localStorage.setItem(getKey('clients'), JSON.stringify(clients)); }, [clients, storeId]);
-  useEffect(() => { localStorage.setItem(getKey('products'), JSON.stringify(products)); }, [products, storeId]);
-  useEffect(() => { localStorage.setItem(getKey('orders'), JSON.stringify(orders)); }, [orders, storeId]);
-  useEffect(() => { localStorage.setItem(getKey('supplies'), JSON.stringify(supplies)); }, [supplies, storeId]);
-  useEffect(() => { localStorage.setItem(getKey('drivers'), JSON.stringify(drivers)); }, [drivers, storeId]);
-  useEffect(() => { localStorage.setItem(getKey('employees'), JSON.stringify(employees)); }, [employees, storeId]);
-  useEffect(() => { localStorage.setItem(getKey('settings'), JSON.stringify(storeSettings)); }, [storeSettings, storeId]);
+  // --- SAVE EFFECTS (Local Only) ---
+  useEffect(() => { 
+    localStorage.setItem(getKey('clients'), JSON.stringify(clients)); 
+  }, [clients, storeId]);
 
-  // Listen for Digital Menu updates
+  useEffect(() => { 
+    localStorage.setItem(getKey('products'), JSON.stringify(products)); 
+  }, [products, storeId]);
+
+  useEffect(() => { 
+    localStorage.setItem(getKey('orders'), JSON.stringify(orders)); 
+  }, [orders, storeId]);
+
+  useEffect(() => { 
+    localStorage.setItem(getKey('supplies'), JSON.stringify(supplies));
+  }, [supplies, storeId]);
+
+  useEffect(() => { 
+    localStorage.setItem(getKey('drivers'), JSON.stringify(drivers));
+  }, [drivers, storeId]);
+
+  useEffect(() => { 
+    localStorage.setItem(getKey('employees'), JSON.stringify(employees));
+  }, [employees, storeId]);
+
+  useEffect(() => { 
+    localStorage.setItem(getKey('settings'), JSON.stringify(storeSettings));
+  }, [storeSettings, storeId]);
+
+  // Listen for Digital Menu updates AND play sound
   useEffect(() => {
     const handleStorageChange = () => {
-      const savedOrders = localStorage.getItem(getKey('orders'));
-      if (savedOrders) {
-        setOrders(JSON.parse(savedOrders));
+      const savedOrdersStr = localStorage.getItem(getKey('orders'));
+      if (savedOrdersStr) {
+        const savedOrders = JSON.parse(savedOrdersStr);
+        
+        // Check if we have MORE orders than before (new order arrived)
+        if (savedOrders.length > orders.length) {
+            // Play Sound
+            if (audioRef.current) {
+                audioRef.current.play().catch(e => console.log("Audio play failed interaction required", e));
+            }
+        }
+        setOrders(savedOrders);
       }
     };
+    
+    // Create Audio Element
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3'); // Reliable CDN URL for Ding
+    
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [storeId]);
+  }, [storeId, orders.length]); // Depend on orders.length to compare
 
   const handleCreateOrder = (newOrder: Order) => {
     setOrders([newOrder, ...orders]);
@@ -161,6 +206,10 @@ export const StoreApp: React.FC<StoreAppProps> = ({ storeId, onLogout }) => {
     } else {
         setLockError(true);
     }
+  };
+  
+  const toggleStoreStatus = () => {
+      setStoreSettings(prev => ({ ...prev, isStoreOpen: !prev.isStoreOpen }));
   };
 
   const NavItem = ({ id, label, icon: Icon }: { id: typeof activeTab, label: string, icon: any }) => (
@@ -231,6 +280,7 @@ export const StoreApp: React.FC<StoreAppProps> = ({ storeId, onLogout }) => {
         </nav>
 
         <div className="mt-auto pt-6 border-t border-gray-100 dark:border-gray-700 space-y-3">
+           
            <button 
              onClick={() => setDarkMode(!darkMode)}
              className="w-full flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition"
@@ -274,11 +324,29 @@ export const StoreApp: React.FC<StoreAppProps> = ({ storeId, onLogout }) => {
               {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
-          <div className="hidden md:flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-full shadow-sm border border-gray-100 dark:border-gray-700">
-               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-               <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Loja Aberta</span>
-            </div>
+          <div className="flex items-center gap-4">
+            
+            {/* STORE TOGGLE */}
+            <button 
+                onClick={toggleStoreStatus}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-sm border transition ${storeSettings.isStoreOpen ? 'bg-green-100 dark:bg-green-900/30 border-green-200 dark:border-green-800' : 'bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800'}`}
+                title="Clique para Abrir/Fechar a loja"
+            >
+               {storeSettings.isStoreOpen ? (
+                   <>
+                      <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
+                      <span className="text-sm font-bold text-green-700 dark:text-green-400">Loja Aberta</span>
+                      <DoorOpen size={16} className="text-green-700 dark:text-green-400 ml-1"/>
+                   </>
+               ) : (
+                   <>
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                      <span className="text-sm font-bold text-red-700 dark:text-red-400">Loja Fechada</span>
+                      <DoorClosed size={16} className="text-red-700 dark:text-red-400 ml-1"/>
+                   </>
+               )}
+            </button>
+
           </div>
         </header>
 

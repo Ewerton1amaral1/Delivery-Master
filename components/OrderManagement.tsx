@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Order, OrderStatus, StoreSettings, PaymentMethod, OrderSource, Driver } from '../types';
-import { Clock, CheckCircle, Truck, ShoppingBag, XCircle, Printer, Copy, Eye, EyeOff, RotateCcw, Trash2, Timer, Lock, AlertTriangle, RefreshCw, Bike, MessageCircle, Send } from 'lucide-react';
+import { Clock, CheckCircle, Truck, ShoppingBag, XCircle, Printer, Copy, Eye, EyeOff, RotateCcw, Trash2, Timer, Lock, AlertTriangle, RefreshCw, Bike, MessageCircle, Send, Bell } from 'lucide-react';
 
 interface OrderManagementProps {
   orders: Order[];
@@ -51,6 +51,7 @@ const OrderTimer = ({ createdAt, status }: { createdAt: string, status: OrderSta
 const SourceBadge = ({ source }: { source: OrderSource }) => {
   if (source === 'IFOOD') return <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">iFood</span>;
   if (source === 'WHATSAPP') return <span className="bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">WhatsApp</span>;
+  if (source === 'DIGITAL_MENU') return <span className="bg-indigo-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Site</span>;
   return <span className="bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-200 text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Loja</span>;
 };
 
@@ -89,20 +90,20 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrd
             const driver = drivers.find(d => d.id === order.driverId);
             
             if (driver && driver.phone) {
-                // Construct the message
-                const itemsText = order.items.map(i => `${i.quantity}x ${i.productName}`).join(', ');
-                const message = `🛵 *NOVA ENTREGA - Pedido #${order.id}*\n\n` +
+                const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress)}`;
+                const itemsText = order.items.map(i => `${i.quantity}x ${i.productName}`).join('\n');
+
+                const message = `🛵 *NOVA ENTREGA - Pedido #${order.id}*\n` +
                                 `👤 *Cliente:* ${order.clientName}\n` +
                                 `📍 *Endereço:* ${order.deliveryAddress}\n` +
                                 (order.deliveryAddressReference ? `ℹ️ *Ref:* ${order.deliveryAddressReference}\n` : '') +
-                                `📦 *Itens:* ${itemsText}\n` +
-                                `💰 *Total a Cobrar:* R$ ${order.total.toFixed(2)}\n` +
+                                `\n🍔 *ITENS:*\n${itemsText}\n` +
+                                `\n💰 *Total:* R$ ${order.total.toFixed(2)}\n` +
                                 `💳 *Pagamento:* ${order.paymentMethod}\n` +
                                 (order.changeFor ? `💵 *Levar Troco para:* R$ ${order.changeFor.toFixed(2)}\n` : '') +
-                                `\nBom trabalho!`;
+                                `\nLink Maps: ${mapsUrl}`;
 
                 const phone = cleanPhoneNumber(driver.phone);
-                // Use the specific link format requested
                 const link = `https://api.whatsapp.com/send/?phone=55${phone}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
 
                 // Open the modal
@@ -123,9 +124,7 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrd
 
   const simulateSync = () => {
     setIsSyncing(true);
-    // Simulate API delay
     setTimeout(() => {
-      // Logic to generate a random incoming order
       const existingIds = orders.map(o => parseInt(o.id)).filter(n => !isNaN(n));
       const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1001;
       
@@ -160,7 +159,6 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrd
     e.stopPropagation();
     setSelectedOrderId(orderId);
     
-    // Check if manager password is configured
     if (settings?.managerPassword && settings.managerPassword.trim().length > 0) {
       setModalType('PASSWORD');
       setPasswordInput('');
@@ -196,7 +194,6 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrd
     e.stopPropagation();
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     
-    // Generate Google Maps URL for QR Code
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress)}`;
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(mapsUrl)}`;
 
@@ -274,23 +271,31 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrd
 
   const handleCopy = (e: React.MouseEvent, order: Order) => {
     e.stopPropagation();
-    const text = `🛵 *PEDIDO #${order.id}*
-👤 ${order.clientName}
-📍 ${order.deliveryAddress}
+    
+    // FORMAT REQUESTED BY USER
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress)}`;
+    
+    const text = `🛵 NOVO PEDIDO #${order.id} - ${settings?.name || 'Minha Loja'}
+    
+👤 Cliente: ${order.clientName}
+📞 Tel: ${order.clientPhone}
+📍 Endereço: ${order.deliveryAddress}
 ${order.deliveryAddressReference ? `ℹ️ Ref: ${order.deliveryAddressReference}` : ''}
-${order.driverName ? `🏍️ Entregador: ${order.driverName}` : ''}
 
-${order.items.map(i => `${i.quantity}x ${i.productName}`).join('\n')}
+🍔 ITENS:
+${order.items.map(i => `${i.quantity}x ${i.productName} ${i.notes ? `(${i.notes})` : ''}`).join('\n')}
 
-💰 *Total: R$ ${order.total.toFixed(2)}*
-💳 ${order.paymentMethod}
-${order.changeFor ? `💵 Troco para R$ ${order.changeFor.toFixed(2)}` : ''}
-`;
-    navigator.clipboard.writeText(text).then(() => alert('Copiado!'));
+💰 Total: R$ ${order.total.toFixed(2)}
+💳 Pagamento: ${order.paymentMethod}
+${order.changeFor ? `💵 Troco para: R$ ${order.changeFor.toFixed(2)}` : ''}
+
+Link Maps: ${mapsUrl}`;
+
+    navigator.clipboard.writeText(text).then(() => alert('Copiado no formato padrão!'));
   };
 
   // Render helpers
-  const renderCard = (order: Order) => (
+  const renderCard = (order: Order, showActions = true) => (
     <div key={order.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition relative group mb-3">
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center gap-2">
@@ -334,49 +339,76 @@ ${order.changeFor ? `💵 Troco para R$ ${order.changeFor.toFixed(2)}` : ''}
          </div>
       )}
 
-      <div className="flex gap-2 mb-3">
-           <button onClick={(e) => handlePrintOrder(e, order)} className="flex-1 flex items-center justify-center gap-1 text-xs bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 py-1.5 rounded border border-gray-200 dark:border-gray-600 transition font-medium">
-             <Printer size={14} /> Imprimir
-           </button>
-           <button onClick={(e) => handleCopy(e, order)} className="flex-1 flex items-center justify-center gap-1 text-xs bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 py-1.5 rounded border border-indigo-100 dark:border-indigo-800 transition font-medium">
-             <Copy size={14} /> Copiar
-           </button>
-      </div>
+      {showActions && (
+        <>
+            <div className="flex gap-2 mb-3">
+                <button onClick={(e) => handlePrintOrder(e, order)} className="flex-1 flex items-center justify-center gap-1 text-xs bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 py-1.5 rounded border border-gray-200 dark:border-gray-600 transition font-medium">
+                    <Printer size={14} /> Imprimir
+                </button>
+                <button onClick={(e) => handleCopy(e, order)} className="flex-1 flex items-center justify-center gap-1 text-xs bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 py-1.5 rounded border border-indigo-100 dark:border-indigo-800 transition font-medium">
+                    <Copy size={14} /> Copiar
+                </button>
+            </div>
 
-      <div className="flex justify-between items-center border-t border-gray-100 dark:border-gray-700 pt-2">
-         <div className="flex flex-col">
-            <span className="font-bold text-indigo-600 dark:text-indigo-400 text-lg">R$ {order.total.toFixed(2)}</span>
-            {order.paymentMethod === PaymentMethod.CASH && order.changeFor && (
-               <span className="text-[10px] text-gray-500 bg-gray-100 px-1 rounded">Troco p/ {order.changeFor}</span>
-            )}
-         </div>
-         <div className="flex gap-1">
-            {order.status === OrderStatus.RECEIVED && (
-               <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, OrderStatus.PREPARING); }} className="p-2 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded hover:bg-amber-200 transition" title="Mover para Cozinha">
-                 <Clock size={20} />
-               </button>
-            )}
-            {order.status === OrderStatus.PREPARING && (
-               <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, OrderStatus.DELIVERING); }} className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 transition" title="Saiu para Entrega">
-                 <Truck size={20} />
-               </button>
-            )}
-            {order.status === OrderStatus.DELIVERING && (
-               <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, OrderStatus.COMPLETED); }} className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded hover:bg-green-200 transition" title="Concluir Pedido">
-                 <CheckCircle size={20} />
-               </button>
-            )}
-            {order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED && (
-               <button 
-                onClick={(e) => initCancel(e, order.id)} 
-                className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 rounded hover:bg-red-100 border border-red-100 dark:border-red-900 transition" 
-                title="Cancelar Pedido"
-               >
-                 <XCircle size={20} />
-               </button>
-            )}
-         </div>
-      </div>
+            <div className="flex justify-between items-center border-t border-gray-100 dark:border-gray-700 pt-2">
+                <div className="flex flex-col">
+                    <span className="font-bold text-indigo-600 dark:text-indigo-400 text-lg">R$ {order.total.toFixed(2)}</span>
+                    {order.paymentMethod === PaymentMethod.CASH && order.changeFor && (
+                    <span className="text-[10px] text-gray-500 bg-gray-100 px-1 rounded">Troco p/ {order.changeFor}</span>
+                    )}
+                </div>
+                <div className="flex gap-1">
+                    {order.status === OrderStatus.PENDING && (
+                        <div className="flex gap-2 w-full">
+                            <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, OrderStatus.RECEIVED); }} className="flex-1 px-3 py-1.5 bg-green-600 text-white rounded font-bold text-xs hover:bg-green-700 shadow-md">
+                                ACEITAR
+                            </button>
+                            <button onClick={(e) => initCancel(e, order.id)} className="px-3 py-1.5 bg-red-100 text-red-600 rounded font-bold text-xs hover:bg-red-200">
+                                RECUSAR
+                            </button>
+                        </div>
+                    )}
+
+                    {order.status === OrderStatus.RECEIVED && (
+                    <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, OrderStatus.PREPARING); }} className="p-2 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded hover:bg-amber-200 transition" title="Mover para Cozinha">
+                        <Clock size={20} />
+                    </button>
+                    )}
+                    {order.status === OrderStatus.PREPARING && (
+                    <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, OrderStatus.DELIVERING); }} className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 transition" title="Saiu para Entrega">
+                        <Truck size={20} />
+                    </button>
+                    )}
+                    {order.status === OrderStatus.DELIVERING && (
+                    <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, OrderStatus.COMPLETED); }} className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded hover:bg-green-200 transition" title="Concluir Pedido">
+                        <CheckCircle size={20} />
+                    </button>
+                    )}
+                    {order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED && order.status !== OrderStatus.PENDING && (
+                    <button 
+                        onClick={(e) => initCancel(e, order.id)} 
+                        className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 rounded hover:bg-red-100 border border-red-100 dark:border-red-900 transition" 
+                        title="Cancelar Pedido"
+                    >
+                        <XCircle size={20} />
+                    </button>
+                    )}
+                </div>
+            </div>
+        </>
+      )}
+
+      {/* SPECIAL RENDER FOR PENDING ORDERS ONLY */}
+      {order.status === OrderStatus.PENDING && !showActions && (
+          <div className="flex gap-2 mt-4">
+             <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, OrderStatus.RECEIVED); }} className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold shadow-sm transition">
+                ACEITAR
+             </button>
+             <button onClick={(e) => initCancel(e, order.id)} className="flex-1 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg font-bold transition">
+                RECUSAR
+             </button>
+          </div>
+      )}
     </div>
   );
 
@@ -387,6 +419,7 @@ ${order.changeFor ? `💵 Troco para R$ ${order.changeFor.toFixed(2)}` : ''}
     { status: OrderStatus.COMPLETED, title: 'Concluídos', icon: CheckCircle, color: 'text-green-600 dark:text-green-400 border-green-500' },
   ];
 
+  const pendingOrders = orders.filter(o => o.status === OrderStatus.PENDING);
   const cancelledOrders = orders.filter(o => o.status === OrderStatus.CANCELLED);
 
   return (
@@ -413,6 +446,18 @@ ${order.changeFor ? `💵 Troco para R$ ${order.changeFor.toFixed(2)}` : ''}
            {showCancelled ? 'Ocultar Cancelados' : `Ver Cancelados (${cancelledOrders.length})`}
          </button>
       </div>
+
+      {/* PENDING APPROVAL SECTION */}
+      {pendingOrders.length > 0 && (
+        <div className="mx-2 mb-6 bg-yellow-50 dark:bg-yellow-900/10 border-2 border-yellow-400 dark:border-yellow-600 rounded-xl p-4 animate-pulse-slow">
+           <h3 className="text-yellow-800 dark:text-yellow-500 font-bold text-lg mb-4 flex items-center gap-2">
+             <Bell className="animate-bounce" /> Pedidos Aguardando Aceite ({pendingOrders.length})
+           </h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {pendingOrders.map(order => renderCard(order, false))}
+           </div>
+        </div>
+      )}
 
       {showCancelled && (
         <div className="mb-6 mx-2 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/50 rounded-xl">

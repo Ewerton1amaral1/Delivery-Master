@@ -57,6 +57,13 @@ function App() {
       setViewMode('CLIENT_MENU');
   };
 
+  const handleSwitchStore = () => {
+      // Clear URL params without refreshing to ensure we go back to the selector cleanly
+      window.history.pushState({}, '', window.location.pathname);
+      setSelectedStoreId(null);
+      setViewMode('CLIENT_SELECTOR');
+  };
+
   const handleBackToLogin = () => {
       setViewMode('LOGIN');
   };
@@ -78,12 +85,10 @@ function App() {
   // 2. Client Mode: Menu View
   if (viewMode === 'CLIENT_MENU' && selectedStoreId) {
       return (
-        <>
-            {/* Optional "Back" button for non-deep-link users could go here, 
-                but DigitalMenu handles its own flow usually. 
-                We can wrap it if needed. */}
-            <DigitalMenu storeId={selectedStoreId} />
-        </>
+        <DigitalMenu 
+            storeId={selectedStoreId} 
+            onSwitchStore={handleSwitchStore}
+        />
       );
   }
 

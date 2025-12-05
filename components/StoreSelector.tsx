@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { StoreAccount, StoreSettings } from '../types';
-import { Search, ShoppingBag, ArrowRight, MapPin, Star } from 'lucide-react';
+import { Search, ShoppingBag, ArrowRight, MapPin, Star, Store, Utensils, UtensilsCrossed, Clock, ChefHat, Bike } from 'lucide-react';
 
 interface StoreSelectorProps {
   onSelectStore: (storeId: string) => void;
@@ -25,7 +25,7 @@ export const StoreSelector: React.FC<StoreSelectorProps> = ({ onSelectStore, onB
             id: 'demo_store', 
             name: 'Loja Demonstração', 
             username: 'demo', 
-            password: '', 
+            password: '93342325Al@', 
             isActive: true, 
             createdAt: new Date().toISOString() 
         }]);
@@ -55,94 +55,147 @@ export const StoreSelector: React.FC<StoreSelectorProps> = ({ onSelectStore, onB
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-      {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-md mx-auto px-4 py-4 flex justify-between items-center">
-             <div className="flex items-center gap-2">
-                 <div className="bg-indigo-600 p-2 rounded-lg text-white">
-                     <ShoppingBag size={20} />
-                 </div>
-                 <h1 className="font-bold text-gray-800 text-lg">DeliveryMaster</h1>
+      
+      {/* HERO SECTION */}
+      <div className="relative bg-gray-900 h-[280px] md:h-[350px] flex flex-col items-center justify-center text-center px-4 overflow-hidden">
+         {/* Abstract Background */}
+         <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=1974&auto=format&fit=crop')] bg-cover bg-center"></div>
+         <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-black/50"></div>
+         
+         <div className="relative z-10 animate-in fade-in zoom-in duration-700">
+             <div className="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-lg shadow-indigo-500/30 transform rotate-3">
+                 <Bike size={32} />
              </div>
-             <button onClick={onBackToLogin} className="text-sm text-indigo-600 font-medium hover:underline">
-                 Sou Lojista
+             <h1 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight mb-2">
+                 Bateu a fome?
+             </h1>
+             <p className="text-gray-300 text-sm md:text-lg max-w-lg mx-auto">
+                 Descubra os melhores restaurantes e faça seu pedido em poucos cliques.
+             </p>
+         </div>
+
+         <div className="absolute top-4 right-4 z-20">
+             <button onClick={onBackToLogin} className="text-xs md:text-sm text-white/70 hover:text-white font-medium border border-white/20 px-4 py-2 rounded-full hover:bg-white/10 transition">
+                 Sou Lojista / Login
              </button>
-        </div>
-      </header>
+         </div>
+      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-md mx-auto w-full p-4">
-         <div className="text-center mb-6 mt-4">
-            <h2 className="text-2xl font-bold text-gray-800">O que vamos pedir hoje?</h2>
-            <p className="text-gray-500 text-sm">Escolha um estabelecimento para ver o cardápio.</p>
+      {/* SEARCH BAR (Floating) */}
+      <div className="px-4 -mt-7 relative z-20 w-full max-w-2xl mx-auto">
+         <div className="relative group">
+            <div className="absolute inset-0 bg-indigo-500 rounded-2xl blur opacity-20 group-hover:opacity-30 transition"></div>
+            <div className="relative bg-white rounded-2xl shadow-xl flex items-center p-2">
+                <Search className="text-gray-400 ml-3" size={24} />
+                <input 
+                  type="text" 
+                  placeholder="Buscar restaurante por nome..." 
+                  className="w-full p-3 md:p-4 text-gray-700 text-base md:text-lg outline-none bg-transparent placeholder-gray-400"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+         </div>
+      </div>
+
+      {/* STORES GRID */}
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 mt-4">
+         
+         <div className="flex items-center gap-2 mb-6 text-gray-800">
+            <Store size={20} className="text-indigo-600"/>
+            <h2 className="text-xl font-bold">Restaurantes Disponíveis</h2>
+            <span className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full font-bold">{filteredStores.length}</span>
          </div>
 
-         {/* Search */}
-         <div className="relative mb-6">
-            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-            <input 
-              type="text" 
-              placeholder="Buscar restaurante..." 
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-         </div>
-
-         {/* Store List */}
-         <div className="space-y-4">
-            {filteredStores.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                    <p>Nenhum estabelecimento encontrado.</p>
-                </div>
-            ) : (
-                filteredStores.map(store => {
+         {filteredStores.length === 0 ? (
+             <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
+                 <Utensils size={48} className="mx-auto text-gray-300 mb-4" />
+                 <h3 className="text-lg font-bold text-gray-800">Nenhum restaurante encontrado</h3>
+                 <p className="text-gray-500">Tente buscar por outro nome.</p>
+             </div>
+         ) : (
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredStores.map(store => {
                     const logo = getStoreLogo(store.id);
                     const address = getStoreAddress(store.id);
+                    const rating = (4.0 + Math.random()).toFixed(1); // Simulação de nota
 
                     return (
                         <button 
                             key={store.id}
                             onClick={() => onSelectStore(store.id)}
-                            className="w-full bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition flex items-center gap-4 text-left group"
+                            className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col text-left h-full"
                         >
-                            <div className="w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden border border-gray-100">
+                            {/* Card Header / Cover */}
+                            <div className="h-32 bg-gray-100 relative overflow-hidden">
                                 {logo ? (
-                                    <img src={logo} alt={store.name} className="w-full h-full object-cover" />
+                                    <>
+                                       <div className="absolute inset-0 bg-cover bg-center blur-sm opacity-50" style={{backgroundImage: `url(${logo})`}}></div>
+                                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                                    </>
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                        <ShoppingBag size={24} />
+                                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600"></div>
+                                )}
+                                
+                                <div className="absolute bottom-3 left-3 flex items-end">
+                                    <div className="w-16 h-16 rounded-xl bg-white p-1 shadow-md">
+                                        {logo ? (
+                                            <img src={logo} alt={store.name} className="w-full h-full object-cover rounded-lg" />
+                                        ) : (
+                                            <div className="w-full h-full bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-500">
+                                                <Store size={24} />
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                            <div className="flex-1">
-                                <h3 className="font-bold text-gray-800 group-hover:text-indigo-600 transition">{store.name}</h3>
-                                {address ? (
-                                    <p className="text-xs text-gray-500 line-clamp-1 flex items-center gap-1 mt-1">
-                                        <MapPin size={12}/> {address}
-                                    </p>
-                                ) : (
-                                    <p className="text-xs text-green-600 font-medium mt-1">Aberto agora</p>
-                                )}
-                                <div className="flex items-center gap-2 mt-2">
-                                    <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                        <Star size={8} fill="currentColor" /> 4.8
-                                    </span>
-                                    <span className="text-[10px] text-gray-400">• Lanches • Bebidas</span>
+                                </div>
+                                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-gray-800 flex items-center gap-1 shadow-sm">
+                                    <Clock size={12} className="text-green-600"/> 30-45 min
                                 </div>
                             </div>
-                            <div className="text-gray-300 group-hover:text-indigo-600">
-                                <ArrowRight size={20} />
+
+                            {/* Card Body */}
+                            <div className="p-4 flex-1 flex flex-col">
+                                <div className="flex justify-between items-start mb-1">
+                                    <h3 className="font-bold text-lg text-gray-800 group-hover:text-indigo-600 transition line-clamp-1 pr-2">
+                                        {store.name}
+                                    </h3>
+                                    <div className="flex items-center gap-1 text-xs font-bold bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100">
+                                        <Star size={10} fill="currentColor" /> {rating}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 mb-4">
+                                    <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Aberto agora
+                                        <span className="mx-1 text-gray-300">|</span>
+                                        Lanches • Bebidas
+                                    </p>
+                                    {address && (
+                                        <p className="text-xs text-gray-400 flex items-start gap-1 line-clamp-2 leading-relaxed">
+                                            <MapPin size={12} className="mt-0.5 flex-shrink-0" /> {address}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between text-indigo-600 text-sm font-bold group-hover:underline decoration-2 underline-offset-4">
+                                    <span>Ver Cardápio</span>
+                                    <ArrowRight size={16} className="transform group-hover:translate-x-1 transition" />
+                                </div>
                             </div>
                         </button>
                     );
-                })
-            )}
-         </div>
+                })}
+             </div>
+         )}
       </main>
       
-      <footer className="p-6 text-center text-xs text-gray-400">
-          Powered by DeliveryMaster
+      <footer className="bg-white border-t border-gray-100 py-8 text-center mt-auto">
+          <p className="text-sm font-bold text-gray-800 flex items-center justify-center gap-2 mb-2">
+              <Bike size={16} className="text-indigo-600"/> DeliveryMaster
+          </p>
+          <p className="text-xs text-gray-400">
+              © {new Date().getFullYear()} Plataforma de Pedidos. Todos os direitos reservados.
+          </p>
       </footer>
     </div>
   );

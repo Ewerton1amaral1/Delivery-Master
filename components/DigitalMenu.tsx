@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, StoreSettings, Order, OrderItem, PaymentMethod, ProductCategory, OrderStatus, Client } from '../types';
-import { ShoppingBag, Minus, Plus, X, ChevronRight, MapPin, CheckCircle, User, ArrowRight } from 'lucide-react';
+import { ShoppingBag, Minus, Plus, X, ChevronRight, MapPin, CheckCircle, User, ArrowRight, ChevronLeft, Store, Clock, Lock, Navigation } from 'lucide-react';
 
 interface DigitalMenuProps {
   storeId: string;
+  onSwitchStore: () => void;
 }
 
-export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
+export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId, onSwitchStore }) => {
   // Load data from LocalStorage
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
@@ -22,7 +23,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
   const [regAddress, setRegAddress] = useState('');
   const [regNumber, setRegNumber] = useState('');
   const [regDistrict, setRegDistrict] = useState('');
+  const [regComplement, setRegComplement] = useState('');
+  const [regNote, setRegNote] = useState('');
   
+  // Geolocation State
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [distanceKm, setDistanceKm] = useState<number>(0);
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
+  const [geoError, setGeoError] = useState<string | null>(null);
+
   // Cart State
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -42,10 +51,90 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
     // 2. Check for Customer Session
     const savedClient = localStorage.getItem(`dm_customer_session_${storeId}`);
     if (savedClient) {
-      setCurrentClient(JSON.parse(savedClient));
+      const client = JSON.parse(savedClient);
+      setCurrentClient(client);
+      setDistanceKm(client.distanceKm || 0);
       setView('MENU');
+      
+      // Recalculate delivery fee if client exists based on settings
+      if (loadedSettings) {
+          const parsedSettings: StoreSettings = JSON.parse(loadedSettings);
+          const fee = calculateFee(client.distanceKm || 0, parsedSettings);
+          setDeliveryFee(fee);
+      }
     }
   }, [storeId]);
+
+  // --- GEOLOCATION HELPER ---
+  const calculateFee = (dist: number, storeSettings: StoreSettings | null): number => {
+      if (!storeSettings?.deliveryRanges) return 5.0; // Default fallback
+      const rule = storeSettings.deliveryRanges.find(r => dist >= r.minKm && dist <= r.maxKm);
+      return rule ? rule.price : 0;
+  };
+
+  const calculateDistance = async () => {
+      if (!regAddress || !regNumber || !regDistrict || !settings?.address) {
+          setGeoError("Preencha o endereço completo da entrega.");
+          return;
+      }
+      
+      setIsCalculating(true);
+      setGeoError(null);
+
+      try {
+          // 1. Get Coordinates for CLIENT
+          const clientQuery = `${regAddress} ${regNumber}, ${regDistrict}`;
+          const clientRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(clientQuery)}&limit=1`);
+          const clientData = await clientRes.json();
+
+          if (!clientData || clientData.length === 0) {
+              throw new Error("Endereço do cliente não encontrado no mapa.");
+          }
+
+          // 2. Get Coordinates for STORE
+          // Clean store address to remove special chars if needed, but Nominatim is usually smart
+          const storeRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(settings.address)}&limit=1`);
+          const storeData = await storeRes.json();
+
+          if (!storeData || storeData.length === 0) {
+              throw new Error("Endereço da loja não encontrado no mapa.");
+          }
+
+          const lat1 = parseFloat(clientData[0].lat);
+          const lon1 = parseFloat(clientData[0].lon);
+          const lat2 = parseFloat(storeData[0].lat);
+          const lon2 = parseFloat(storeData[0].lon);
+
+          // 3. Haversine Formula (KM)
+          const R = 6371; // Radius of earth in km
+          const dLat = deg2rad(lat2 - lat1);
+          const dLon = deg2rad(lon2 - lon1);
+          const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+          const d = R * c; // Distance in km
+          
+          const finalDist = parseFloat(d.toFixed(1));
+          setDistanceKm(finalDist);
+          
+          // 4. Calculate Fee
+          const fee = calculateFee(finalDist, settings);
+          setDeliveryFee(fee);
+
+      } catch (err: any) {
+          setGeoError(err.message || "Erro ao calcular distância.");
+          setDistanceKm(0);
+          setDeliveryFee(5.0); // Fallback
+      } finally {
+          setIsCalculating(false);
+      }
+  };
+
+  const deg2rad = (deg: number) => {
+    return deg * (Math.PI/180);
+  };
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,41 +145,58 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
 
     const fullAddress = `${regAddress}, ${regNumber} - ${regDistrict}`;
 
-    const newClient: Client = {
-      id: `cli_${Date.now()}`,
-      name: regName,
-      phone: regPhone,
-      email: '', // Optional for quick checkout
-      address: {
-        street: regAddress,
-        number: regNumber,
-        neighborhood: regDistrict,
-        city: '', 
-        formatted: fullAddress
-      },
-      distanceKm: 0, // Could be calculated via API later
-      walletBalance: 0
-    };
-
-    // 1. Save Session
-    localStorage.setItem(`dm_customer_session_${storeId}`, JSON.stringify(newClient));
-    setCurrentClient(newClient);
-
-    // 2. Add to Store's Client Database (Simulating Backend)
+    // Get existing clients
     const storeClientsStr = localStorage.getItem(`dm_${storeId}_clients`);
     const storeClients: Client[] = storeClientsStr ? JSON.parse(storeClientsStr) : [];
-    
-    // Check if phone already exists to update or add
+
+    // Check if client exists (by phone) to unify
     const existingIndex = storeClients.findIndex(c => c.phone === regPhone);
-    let updatedClients;
-    
+    let finalClient: Client;
+    let updatedClients = [...storeClients];
+
     if (existingIndex >= 0) {
-       updatedClients = [...storeClients];
-       updatedClients[existingIndex] = { ...updatedClients[existingIndex], ...newClient, id: storeClients[existingIndex].id }; // Keep original ID if updating
+       const existingClient = storeClients[existingIndex];
+       finalClient = {
+          ...existingClient,
+          name: regName,
+          address: {
+             street: regAddress,
+             number: regNumber,
+             neighborhood: regDistrict,
+             complement: regComplement,
+             city: '', 
+             formatted: fullAddress,
+             reference: regNote
+          },
+          distanceKm: distanceKm // Update distance
+       };
+       updatedClients[existingIndex] = finalClient;
     } else {
-       updatedClients = [...storeClients, newClient];
+       finalClient = {
+          id: `cli_${Date.now()}`,
+          name: regName,
+          phone: regPhone,
+          email: '', 
+          address: {
+            street: regAddress,
+            number: regNumber,
+            neighborhood: regDistrict,
+            complement: regComplement,
+            city: '', 
+            formatted: fullAddress,
+            reference: regNote
+          },
+          distanceKm: distanceKm, 
+          walletBalance: 0
+       };
+       updatedClients.push(finalClient);
     }
 
+    // 1. Save Session
+    localStorage.setItem(`dm_customer_session_${storeId}`, JSON.stringify(finalClient));
+    setCurrentClient(finalClient);
+
+    // 2. Save to Store Database
     localStorage.setItem(`dm_${storeId}_clients`, JSON.stringify(updatedClients));
 
     // 3. Move to Menu
@@ -132,12 +238,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
 
   const handleSubmitOrder = () => {
     if (!currentClient) return;
+    
+    if (settings && settings.isStoreOpen === false) {
+        alert("Desculpe, a loja está fechada no momento.");
+        return;
+    }
 
-    // Load existing orders to append
     const existingOrdersStr = localStorage.getItem(`dm_${storeId}_orders`);
     const existingOrders: Order[] = existingOrdersStr ? JSON.parse(existingOrdersStr) : [];
     
-    // Generate sequential ID
     const existingIds = existingOrders.map(o => parseInt(o.id)).filter(n => !isNaN(n));
     const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
 
@@ -148,12 +257,13 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
       clientName: currentClient.name,
       clientPhone: currentClient.phone,
       deliveryAddress: currentClient.address.formatted || 'Endereço não informado',
+      deliveryAddressReference: currentClient.address.reference,
       items: cart,
       subtotal: cartTotal,
-      deliveryFee: 5.00, // Fixed for demo
+      deliveryFee: deliveryFee, // Calculated Fee
       discount: 0,
-      total: cartTotal + 5.00,
-      status: OrderStatus.RECEIVED,
+      total: cartTotal + deliveryFee,
+      status: OrderStatus.PENDING,
       paymentMethod,
       paymentStatus: 'Pending',
       createdAt: new Date().toISOString(),
@@ -163,14 +273,49 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
     const updatedOrders = [newOrder, ...existingOrders];
     localStorage.setItem(`dm_${storeId}_orders`, JSON.stringify(updatedOrders));
     
-    // Trigger storage event for auto-update in admin panel
     window.dispatchEvent(new Event('storage'));
 
     setView('SUCCESS');
     setCart([]);
   };
+  
+  const handleWhatsAppShare = () => {
+      if (!settings?.contactPhone) return;
+      
+      const phone = settings.contactPhone.replace(/\D/g, '');
+      const message = `Olá! Fiz um pedido pelo cardápio digital.\n` + 
+                      `Nome: ${currentClient?.name}\n` + 
+                      `Itens: ${cartTotal} itens.\n` + 
+                      `Total: R$ ${(cartTotal + deliveryFee).toFixed(2)}\n` +
+                      `Poderiam confirmar?`;
+      
+      const url = `https://api.whatsapp.com/send/?phone=55${phone}&text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank');
+  };
 
   // --- RENDER VIEWS ---
+  
+  // STORE CLOSED SCREEN
+  if (settings && settings.isStoreOpen === false) {
+      return (
+        <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 text-center font-sans text-white">
+            <div className="bg-red-500/20 p-6 rounded-full text-red-500 mb-6 animate-pulse">
+                <Lock size={64} />
+            </div>
+            <h1 className="text-3xl font-bold mb-2">Loja Fechada</h1>
+            <p className="text-gray-400 mb-8 max-w-xs">
+                No momento não estamos aceitando pedidos. Por favor, verifique nosso horário de funcionamento ou tente novamente mais tarde.
+            </p>
+            
+            <button 
+              onClick={onSwitchStore}
+              className="text-white/70 hover:text-white flex items-center gap-2 border border-white/20 px-4 py-2 rounded-full"
+            >
+              <ChevronLeft size={16} /> Ver outros restaurantes
+            </button>
+        </div>
+      );
+  }
 
   if (view === 'SUCCESS') {
     return (
@@ -178,13 +323,30 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
         <div className="bg-green-100 p-6 rounded-full text-green-600 mb-6 animate-in zoom-in">
           <CheckCircle size={64} />
         </div>
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Pedido Recebido!</h1>
-        <p className="text-gray-600 mb-8 max-w-xs">A loja <strong>{settings?.name}</strong> já recebeu seu pedido e começará o preparo.</p>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">Pedido Enviado!</h1>
+        <p className="text-gray-600 mb-6 max-w-xs">A loja <strong>{settings?.name}</strong> recebeu seu pedido e está analisando.</p>
+        
+        {settings?.contactPhone && (
+            <button 
+            onClick={handleWhatsAppShare}
+            className="w-full max-w-xs bg-green-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-600 transition shadow-lg shadow-green-200 mb-4 flex items-center justify-center gap-2"
+            >
+            Enviar para WhatsApp da Loja
+            </button>
+        )}
+
         <button 
           onClick={() => setView('MENU')}
-          className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-700 transition shadow-lg shadow-green-200"
+          className="text-green-700 font-bold hover:underline"
         >
           Fazer Novo Pedido
+        </button>
+        
+        <button 
+          onClick={onSwitchStore}
+          className="mt-8 text-sm text-gray-400 flex items-center gap-1 bg-white px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+        >
+          <ChevronLeft size={14} /> Voltar para Restaurantes
         </button>
       </div>
     );
@@ -193,6 +355,14 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
   if (view === 'REGISTER') {
     return (
       <div className="min-h-screen bg-white flex flex-col font-sans">
+        
+        {/* Sticky Back Button */}
+        <div className="bg-white border-b sticky top-0 z-30 shadow-sm">
+             <button onClick={onSwitchStore} className="w-full text-indigo-600 flex items-center justify-center gap-2 text-sm font-bold py-4 bg-indigo-50 hover:bg-indigo-100 transition">
+                <ChevronLeft size={18}/> Escolher outro restaurante
+             </button>
+        </div>
+
         <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-md mx-auto w-full">
            <div className="text-center mb-10">
               {settings?.logoUrl ? (
@@ -263,6 +433,46 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
                             onChange={e => setRegDistrict(e.target.value)}
                         />
                     </div>
+                    
+                    {/* --- AUTO CALCULATION BUTTON --- */}
+                    <button
+                        type="button" 
+                        onClick={calculateDistance}
+                        disabled={isCalculating}
+                        className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition"
+                    >
+                        {isCalculating ? (
+                            <span className="animate-pulse">Calculando...</span>
+                        ) : (
+                            <>
+                                <Navigation size={16} /> Validar Endereço & Taxa
+                            </>
+                        )}
+                    </button>
+                    
+                    {/* GEO FEEDBACK */}
+                    {geoError && <p className="text-xs text-red-500 text-center font-bold">{geoError}</p>}
+                    {distanceKm > 0 && !geoError && (
+                        <div className="text-center bg-green-50 border border-green-200 p-2 rounded-lg">
+                            <p className="text-green-700 text-sm font-bold">Localizado! Distância: {distanceKm}km</p>
+                            <p className="text-green-600 text-xs">Taxa de Entrega: R$ {deliveryFee.toFixed(2)}</p>
+                        </div>
+                    )}
+                    
+                    <input 
+                        type="text" 
+                        placeholder="Complemento (Opcional)"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={regComplement}
+                        onChange={e => setRegComplement(e.target.value)}
+                    />
+                    <input 
+                        type="text" 
+                        placeholder="Ponto de Referência (Opcional)"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={regNote}
+                        onChange={e => setRegNote(e.target.value)}
+                    />
                  </div>
               </div>
 
@@ -286,8 +496,17 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-sans max-w-md mx-auto shadow-2xl relative">
-      {/* Header */}
-      <header className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
+      {/* Sticky Header with Back Button */}
+      <div className="bg-indigo-900 text-white p-3 text-xs flex justify-between items-center sticky top-0 z-30 shadow-md">
+         <button 
+            onClick={onSwitchStore} 
+            className="flex items-center gap-1.5 font-bold hover:bg-white/10 px-3 py-1.5 rounded-lg transition"
+         >
+            <ChevronLeft size={16}/> Escolher outro restaurante
+         </button>
+      </div>
+
+      <div className="bg-white p-4 border-b border-gray-100 flex justify-between items-center">
         <div className="flex items-center gap-3">
           {settings?.logoUrl ? (
             <img src={settings.logoUrl} alt="Logo" className="w-10 h-10 rounded-lg object-cover" />
@@ -301,10 +520,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
             <p className="text-xs text-gray-500 truncate max-w-[150px]">Olá, {currentClient?.name}</p>
           </div>
         </div>
-        <button onClick={handleLogout} className="text-xs text-red-500 font-medium hover:underline">
+        <button onClick={handleLogout} className="text-xs text-red-500 font-medium hover:underline bg-red-50 px-3 py-1 rounded-full">
            Sair
         </button>
-      </header>
+      </div>
 
       {/* Categories */}
       <div className="p-4 overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2">
@@ -402,6 +621,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
                  <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2 text-sm"><MapPin size={16}/> Entregar para:</h3>
                  <p className="font-bold text-gray-700">{currentClient?.name}</p>
                  <p className="text-sm text-gray-500">{currentClient?.address.formatted}</p>
+                 {currentClient?.address.complement && (
+                     <p className="text-xs text-gray-500 mt-1 italic">Compl: {currentClient.address.complement}</p>
+                 )}
+                  {currentClient?.address.reference && (
+                     <p className="text-xs text-gray-500 mt-1 italic">Ref: {currentClient.address.reference}</p>
+                 )}
                  <button onClick={handleLogout} className="text-xs text-indigo-600 font-bold mt-2 hover:underline">
                     Trocar Endereço / Cadastro
                  </button>
@@ -441,12 +666,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ storeId }) => {
                  <span>R$ {cartTotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between mb-4 text-sm">
-                 <span className="text-gray-500">Taxa de Entrega</span>
-                 <span>R$ 5.00</span>
+                 <span className="text-gray-500">Taxa de Entrega {distanceKm > 0 ? `(${distanceKm}km)` : ''}</span>
+                 <span>R$ {deliveryFee.toFixed(2)}</span>
               </div>
               <div className="flex justify-between mb-6 text-xl font-bold">
                  <span>Total</span>
-                 <span>R$ {(cartTotal + 5).toFixed(2)}</span>
+                 <span>R$ {(cartTotal + deliveryFee).toFixed(2)}</span>
               </div>
               
               <button 

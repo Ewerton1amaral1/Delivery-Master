@@ -1,5 +1,6 @@
 
 export enum OrderStatus {
+  PENDING = 'Aguardando Confirmação',
   RECEIVED = 'Recebido',
   PREPARING = 'Em Preparo',
   DELIVERING = 'Em Entrega',
@@ -153,6 +154,8 @@ export interface StoreSettings {
   address: string;
   logoUrl?: string;
   managerPassword?: string;
+  contactPhone?: string; // WhatsApp number
+  isStoreOpen?: boolean; // Status da Loja (Aberta/Fechada)
   
   deliveryRanges?: DeliveryRange[]; // Fee charged to CUSTOMER
   driverFeeRanges?: DeliveryRange[]; // Fee paid to DRIVER
@@ -190,4 +193,12 @@ export interface StoreAccount {
   password: string;
   isActive: boolean;
   createdAt: string;
+}
+export interface FirebaseConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
 }
